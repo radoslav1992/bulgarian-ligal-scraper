@@ -50,29 +50,24 @@ Both sites reject non-browser clients with 403, so the worker sends a regular de
 
 ## Setup
 
+### Deploy via GitHub (recommended)
+
+Every push to `main` runs typecheck + tests, provisions any missing Cloudflare resources, and deploys ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)). One-time setup:
+
+1. In Cloudflare dashboard → **My Profile → API Tokens → Create Token**, create a token with these account permissions: **Workers Scripts: Edit**, **D1: Edit**, **Vectorize: Edit**, **Queues: Edit**.
+2. In the GitHub repo → **Settings → Secrets and variables → Actions**, add:
+   - `CLOUDFLARE_API_TOKEN` — the token from step 1
+   - `CLOUDFLARE_ACCOUNT_ID` — from dashboard → Workers & Pages (right sidebar)
+   - `WORKER_API_TOKEN` *(optional but recommended)* — any long random string; uploaded as the worker's `API_TOKEN` secret, which your agents send as a Bearer token
+3. Push to `main`. The first deploy creates the Vectorize index (1024 dims, cosine, with `source`/`docId` metadata indexes), the D1 database (id is resolved and patched into `wrangler.jsonc` automatically at deploy time), both queues, and applies migrations.
+
+### Manual deploy (alternative)
+
 ```bash
 npm install
 npx wrangler login
-
-# 1. Vector index (1024 dims for BGE-M3, cosine)
-npx wrangler vectorize create bg-legal-index --dimensions=1024 --metric=cosine
-# metadata indexes enable filtered queries (?source=lexbg|vks)
-npx wrangler vectorize create-metadata-index bg-legal-index --property-name=source --type=string
-npx wrangler vectorize create-metadata-index bg-legal-index --property-name=docId --type=string
-
-# 2. Document registry
-npx wrangler d1 create bg-legal-registry
-#    → paste the returned database_id into wrangler.jsonc
-npm run db:migrate
-
-# 3. Crawl queue + dead letter queue
-npx wrangler queues create bg-legal-crawl
-npx wrangler queues create bg-legal-crawl-dlq
-
-# 4. API auth token (any long random string; your agents will send it as a Bearer token)
-npx wrangler secret put API_TOKEN
-
-# 5. Ship it
+npm run provision    # same idempotent script CI uses: Vectorize + D1 + queues + migrations
+npx wrangler secret put API_TOKEN   # any long random string for your agents
 npm run deploy
 ```
 

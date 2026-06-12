@@ -7,6 +7,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
+    "provision": "node scripts/provision.mjs",
     "test": "vitest run",
     "db:migrate": "wrangler d1 migrations apply bg-legal-registry --remote",
     "db:migrate:local": "wrangler d1 migrations apply bg-legal-registry --local"
