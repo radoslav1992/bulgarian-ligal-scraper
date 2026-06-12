@@ -11,4 +11,10 @@ export interface SourceAdapter {
 
   /** Fetch and extract a single document. Returns null when there is no usable content. */
   fetchDocument(env: Env, url: string): Promise<ExtractedDocument | null>;
+
+  /** Extract a document from HTML fetched elsewhere (the /ingest push path). */
+  extract(env: Env, url: string, html: string): Promise<ExtractedDocument | null>;
+
+  /** Derive the canonical doc id from a document URL, or null if unrecognised. */
+  docIdForUrl(url: string): string | null;
 }

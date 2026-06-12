@@ -68,9 +68,16 @@ export const lexbg: SourceAdapter = {
     return docs;
   },
 
-  async fetchDocument(_env: Env, url: string): Promise<ExtractedDocument | null> {
-    const html = await fetchHtml(url);
+  docIdForUrl(url: string): string | null {
+    const m = LDOC_HREF.exec(url);
+    return m?.[1] ? `lexbg:${m[1]}` : null;
+  },
 
+  async fetchDocument(env: Env, url: string): Promise<ExtractedDocument | null> {
+    return this.extract(env, url, await fetchHtml(url));
+  },
+
+  async extract(_env: Env, _url: string, html: string): Promise<ExtractedDocument | null> {
     let title = normalizeWhitespace(await extractText(html, TITLE_SELECTORS));
     if (!title) {
       const m = /<title>([^<]*)<\/title>/i.exec(html);

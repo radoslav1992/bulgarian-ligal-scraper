@@ -101,9 +101,16 @@ export const vks: SourceAdapter = {
     return docs;
   },
 
-  async fetchDocument(_env: Env, url: string): Promise<ExtractedDocument | null> {
-    const html = await fetchHtml(url);
+  docIdForUrl(url: string): string | null {
+    const m = ACT_HREF.exec(url);
+    return m?.[1] ? `vks:${m[1].toUpperCase()}` : null;
+  },
 
+  async fetchDocument(env: Env, url: string): Promise<ExtractedDocument | null> {
+    return this.extract(env, url, await fetchHtml(url));
+  },
+
+  async extract(_env: Env, _url: string, html: string): Promise<ExtractedDocument | null> {
     const m = /<title>([^<]*)<\/title>/i.exec(html);
     const title = normalizeWhitespace(m?.[1] ?? '');
 

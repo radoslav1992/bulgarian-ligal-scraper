@@ -52,6 +52,11 @@
   "triggers": { "crons": ["0 3 * * *"] },
 
   "vars": {
+    // "push": lex.bg challenges datacenter IPs (incl. Workers), so pages are
+    // fetched by scripts/local-crawl.mjs on an external machine and posted to
+    // /ingest; the worker cron does nothing. Set to "worker" to crawl directly
+    // (only works if lex.bg ever stops challenging Cloudflare egress IPs).
+    "SCRAPE_MODE": "push",
     // Sources covered by the daily cron and default /admin/scrape calls.
     // Add "vks" (→ "lexbg,vks") once its SEARCH_PARAMS are verified — see README.
     "ENABLED_SOURCES": "lexbg",
