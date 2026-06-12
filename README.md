@@ -37,10 +37,12 @@ GET /search?q=... ──► embed query ──► Vectorize topK ──► JSON 
 
 ## Data sources
 
-| Source | What | How |
-|---|---|---|
-| `lexbg` | Constitution, codes (кодекси), laws (закони); optionally ordinances/regulations | Listing pages `lex.bg/laws/tree/{laws,code,ords,regs,reg_laws}` → documents `lex.bg/laws/ldoc/<id>`. Title from `#DocumentTitle`, body from `div.boxi.boxinb`. |
-| `vks` | Supreme Court of Cassation acts (public since 1 Oct 2008) | Search results `vks.bg/spisak-aktove.jsp` (by date range) → acts `vks.bg/pregled-akt.jsp?type=ot-spisak&id=<id>`. |
+| Source | Default | What | How |
+|---|---|---|---|
+| `lexbg` | **enabled** | Constitution, codes (кодекси), laws (закони); optionally ordinances/regulations | Listing pages `lex.bg/laws/tree/{laws,code,ords,regs,reg_laws}` → documents `lex.bg/laws/ldoc/<id>`. Title from `#DocumentTitle`, body from `div.boxi.boxinb`. |
+| `vks` | disabled | Supreme Court of Cassation acts (public since 1 Oct 2008) | Search results `vks.bg/spisak-aktove.jsp` (by date range) → acts `vks.bg/pregled-akt.jsp?type=ot-spisak&id=<id>`. |
+
+Only `lexbg` is active out of the box (`ENABLED_SOURCES` in `wrangler.jsonc`); the daily cron and default scrape calls touch laws only. To turn on case law later: verify the VKS search parameters (below), set `ENABLED_SOURCES` to `lexbg,vks`, redeploy, and run a one-time `POST /admin/scrape {"source":"vks","mode":"full"}`.
 
 Both sites reject non-browser clients with 403, so the worker sends a regular desktop-browser profile and decodes `windows-1251` responses where needed.
 
@@ -77,9 +79,9 @@ npm run deploy
 # All laws + codes + constitution from lex.bg (a few thousand documents)
 curl -X POST https://<your-worker>.workers.dev/admin/scrape \
   -H "Authorization: Bearer $API_TOKEN" -H "Content-Type: application/json" \
-  -d '{"source": "lexbg", "mode": "full"}'
+  -d '{"mode": "full"}'
 
-# VKS case backfill — only after verifying SEARCH_PARAMS (see warning above)
+# Later, once VKS is enabled (see Data sources above): case backfill
 curl -X POST .../admin/scrape -H "Authorization: Bearer $API_TOKEN" \
   -d '{"source": "vks", "mode": "full"}'
 ```

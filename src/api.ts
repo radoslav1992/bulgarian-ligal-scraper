@@ -1,6 +1,6 @@
 import { embedQuery } from './lib/embed';
 import { kickOff } from './pipeline';
-import { ALL_SOURCES } from './sources';
+import { ALL_SOURCES, enabledSources } from './sources';
 import type { CrawlMode, Env, SourceId } from './types';
 
 export async function handleRequest(req: Request, env: Env): Promise<Response> {
@@ -89,7 +89,9 @@ async function status(env: Env): Promise<Response> {
 
 async function adminScrape(req: Request, env: Env): Promise<Response> {
   const body = await readJson<{ source?: SourceId; mode?: CrawlMode; force?: boolean }>(req);
-  const sources = body.source ? [body.source] : ALL_SOURCES;
+  // An explicit source always works (e.g. a deliberate VKS run); the default
+  // covers only the sources enabled via ENABLED_SOURCES.
+  const sources = body.source ? [body.source] : enabledSources(env);
   if (body.source && !ALL_SOURCES.includes(body.source)) {
     return json({ error: `unknown source; expected one of ${ALL_SOURCES.join(', ')}` }, 400);
   }

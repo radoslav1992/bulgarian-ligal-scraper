@@ -1,7 +1,7 @@
 import { chunkLegalText } from './lib/chunk';
 import { embedTexts } from './lib/embed';
 import { sha256Hex } from './lib/hash';
-import { getAdapter, ALL_SOURCES } from './sources';
+import { enabledSources, getAdapter } from './sources';
 import type { CrawlJob, CrawlMode, Env, SourceId } from './types';
 
 /** Vectorize metadata values are capped at 10KiB per vector; stay well under. */
@@ -15,9 +15,10 @@ const QUEUE_SEND_BATCH = 100;
 export async function kickOff(
   env: Env,
   mode: CrawlMode,
-  sources: SourceId[] = ALL_SOURCES,
+  sources?: SourceId[],
   force = false,
 ): Promise<number> {
+  sources ??= enabledSources(env);
   const jobs: CrawlJob[] = [];
   for (const sourceId of sources) {
     const adapter = getAdapter(sourceId);

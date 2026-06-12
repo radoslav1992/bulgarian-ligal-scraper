@@ -52,6 +52,9 @@
   "triggers": { "crons": ["0 3 * * *"] },
 
   "vars": {
+    // Sources covered by the daily cron and default /admin/scrape calls.
+    // Add "vks" (→ "lexbg,vks") once its SEARCH_PARAMS are verified — see README.
+    "ENABLED_SOURCES": "lexbg",
     // Comma-separated lex.bg trees to crawl. Available: laws, code, ords, regs, reg_laws.
     // "laws" + "code" + the constitution cover statutes; add ords/regs for secondary legislation.
     "LEXBG_TREES": "laws,code",

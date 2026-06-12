@@ -28,6 +28,7 @@ export interface Env {
   DB: D1Database;
   CRAWL_QUEUE: Queue<CrawlJob>;
   API_TOKEN?: string;
+  ENABLED_SOURCES?: string;
   LEXBG_TREES?: string;
   VKS_RECENT_DAYS?: string;
   VKS_BACKFILL_FROM_YEAR?: string;
