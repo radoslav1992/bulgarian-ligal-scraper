@@ -1,0 +1,20 @@
+{
+  "name": "bulgarian-legal-scraper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker that scrapes Bulgarian laws (lex.bg) and court cases (vks.bg), indexes them into Cloudflare Vectorize and keeps them fresh with a daily incremental crawl.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:migrate": "wrangler d1 migrations apply bg-legal-registry --remote",
+    "db:migrate:local": "wrangler d1 migrations apply bg-legal-registry --local"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250601.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.9",
+    "wrangler": "^4.16.0"
+  }
+}

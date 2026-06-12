@@ -1,0 +1,65 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bulgarian-legal-scraper",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-01",
+
+  // Workers AI — used for BGE-M3 multilingual embeddings (handles Bulgarian well).
+  "ai": { "binding": "AI" },
+
+  // Vector database. Create with:
+  //   npx wrangler vectorize create bg-legal-index --dimensions=1024 --metric=cosine
+  "vectorize": [
+    { "binding": "VECTORS", "index_name": "bg-legal-index" }
+  ],
+
+  // Document registry for change detection. Create with:
+  //   npx wrangler d1 create bg-legal-registry
+  // then paste the returned database_id below.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bg-legal-registry",
+      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Crawl pipeline. Create with:
+  //   npx wrangler queues create bg-legal-crawl
+  //   npx wrangler queues create bg-legal-crawl-dlq
+  "queues": {
+    "producers": [
+      { "binding": "CRAWL_QUEUE", "queue": "bg-legal-crawl" }
+    ],
+    "consumers": [
+      {
+        "queue": "bg-legal-crawl",
+        // Small batches + single concurrency = polite, steady crawl pace.
+        "max_batch_size": 5,
+        "max_batch_timeout": 10,
+        "max_retries": 3,
+        "max_concurrency": 1,
+        "dead_letter_queue": "bg-legal-crawl-dlq"
+      }
+    ]
+  },
+
+  // Daily incremental run at 03:00 UTC (05:00/06:00 in Bulgaria).
+  "triggers": { "crons": ["0 3 * * *"] },
+
+  "vars": {
+    // Comma-separated lex.bg trees to crawl. Available: laws, code, ords, regs, reg_laws.
+    // "laws" + "code" + the constitution cover statutes; add ords/regs for secondary legislation.
+    "LEXBG_TREES": "laws,code",
+    // How many days back the daily VKS (Supreme Court of Cassation) sweep looks.
+    "VKS_RECENT_DAYS": "30",
+    // First year of the VKS full backfill (acts are public from 1 Oct 2008 onward).
+    "VKS_BACKFILL_FROM_YEAR": "2008",
+    // Delay between crawled pages, milliseconds.
+    "CRAWL_DELAY_MS": "500"
+  }
+
+  // Secrets (set with `npx wrangler secret put <NAME>`):
+  //   API_TOKEN — bearer token required for /search and /admin endpoints.
+}
