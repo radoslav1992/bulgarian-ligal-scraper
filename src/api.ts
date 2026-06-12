@@ -1,4 +1,5 @@
 import { embedQuery } from './lib/embed';
+import { probeUrl } from './lib/fetch';
 import { kickOff } from './pipeline';
 import { ALL_SOURCES, enabledSources } from './sources';
 import type { CrawlMode, Env, SourceId } from './types';
@@ -33,6 +34,9 @@ export async function handleRequest(req: Request, env: Env): Promise<Response> {
   }
   if (url.pathname === '/admin/index-url' && req.method === 'POST') {
     return adminIndexUrl(req, env);
+  }
+  if (url.pathname === '/admin/test-fetch' && req.method === 'GET') {
+    return adminTestFetch(url);
   }
 
   return json({ error: 'not found' }, 404);
@@ -100,8 +104,7 @@ async function adminScrape(req: Request, env: Env): Promise<Response> {
   return json({ ok: true, mode, sources, discoveryJobsQueued: queued });
 }
 
-async function adminIndexUrl(req: Request, env: Env): Promise<Response> {
-  const body = await readJson<{ source?: SourceId; docId?: string; url?: string; force?: boolean }>(req);
+async function adminIndexUrl(req: Request, env: Env): Promise<Response> {  const body = await readJson<{ source?: SourceId; docId?: string; url?: string; force?: boolean }>(req);
   if (!body.source || !body.url || !ALL_SOURCES.includes(body.source)) {
     return json({ error: 'required: source (lexbg|vks), url; optional: docId, force' }, 400);
   }
@@ -114,6 +117,22 @@ async function adminIndexUrl(req: Request, env: Env): Promise<Response> {
     force: body.force ?? true,
   });
   return json({ ok: true, queued: docId });
+}
+
+/** Try several header profiles against a scrape-target URL; diagnostics for 403s. */
+async function adminTestFetch(url: URL): Promise<Response> {
+  const target = url.searchParams.get('url') ?? 'https://lex.bg/laws/tree/laws';
+  let host: string;
+  try {
+    host = new URL(target).hostname;
+  } catch {
+    return json({ error: 'invalid url' }, 400);
+  }
+  // Not an open proxy: only the sites this worker scrapes.
+  if (!/(^|\.)(lex\.bg|vks\.bg)$/.test(host)) {
+    return json({ error: 'url must be on lex.bg or vks.bg' }, 400);
+  }
+  return json({ target, results: await probeUrl(target) });
 }
 
 async function readJson<T>(req: Request): Promise<T> {
