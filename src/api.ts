@@ -1,7 +1,7 @@
 import { embedQuery } from './lib/embed';
 import { probeUrl } from './lib/fetch';
-import { kickOff } from './pipeline';
-import { ALL_SOURCES, enabledSources } from './sources';
+import { indexExtracted, kickOff } from './pipeline';
+import { ALL_SOURCES, enabledSources, getAdapter } from './sources';
 import type { CrawlMode, Env, SourceId } from './types';
 
 export async function handleRequest(req: Request, env: Env): Promise<Response> {
@@ -37,6 +37,9 @@ export async function handleRequest(req: Request, env: Env): Promise<Response> {
   }
   if (url.pathname === '/admin/test-fetch' && req.method === 'GET') {
     return adminTestFetch(url);
+  }
+  if (url.pathname === '/ingest' && req.method === 'POST') {
+    return ingest(req, env);
   }
 
   return json({ error: 'not found' }, 404);
@@ -92,12 +95,22 @@ async function status(env: Env): Promise<Response> {
 }
 
 async function adminScrape(req: Request, env: Env): Promise<Response> {
-  const body = await readJson<{ source?: SourceId; mode?: CrawlMode; force?: boolean }>(req);
+  const body = await readJson<{ source?: SourceId; mode?: CrawlMode; force?: boolean; override?: boolean }>(req);
   // An explicit source always works (e.g. a deliberate VKS run); the default
   // covers only the sources enabled via ENABLED_SOURCES.
   const sources = body.source ? [body.source] : enabledSources(env);
   if (body.source && !ALL_SOURCES.includes(body.source)) {
     return json({ error: `unknown source; expected one of ${ALL_SOURCES.join(', ')}` }, 400);
+  }
+  if ((env.SCRAPE_MODE ?? 'worker') === 'push' && !body.override) {
+    return json(
+      {
+        error:
+          'SCRAPE_MODE=push: the worker cannot fetch lex.bg directly (datacenter IPs are challenged). ' +
+          'Run scripts/local-crawl.mjs from an allowed network, or pass {"override": true} to force queue crawling.',
+      },
+      409,
+    );
   }
   const mode: CrawlMode = body.mode === 'full' ? 'full' : 'incremental';
   const queued = await kickOff(env, mode, sources, body.force ?? false);
@@ -117,6 +130,45 @@ async function adminIndexUrl(req: Request, env: Env): Promise<Response> {  const
     force: body.force ?? true,
   });
   return json({ ok: true, queued: docId });
+}
+
+/**
+ * Push path: an external feeder (scripts/local-crawl.mjs) fetches pages from
+ * a network lex.bg accepts and posts the raw HTML here; the worker extracts,
+ * hash-checks, chunks, embeds and indexes it.
+ */
+async function ingest(req: Request, env: Env): Promise<Response> {
+  const body = await readJson<{
+    source?: SourceId;
+    docId?: string;
+    url?: string;
+    title?: string;
+    html?: string;
+    text?: string;
+    force?: boolean;
+  }>(req);
+  if (!body.source || !ALL_SOURCES.includes(body.source) || !body.url || (!body.html && !body.text)) {
+    return json(
+      { error: 'required: source (lexbg|vks), url, and html or text; optional: docId, title, force' },
+      400,
+    );
+  }
+  const adapter = getAdapter(body.source);
+  const docId = body.docId ?? adapter.docIdForUrl(body.url);
+  if (!docId) {
+    return json({ error: `cannot derive docId from url; pass docId explicitly` }, 400);
+  }
+  // Pre-extracted plain text bypasses HTML extraction (e.g. bulk-loading an
+  // existing scrape dump); raw HTML goes through the source adapter.
+  const doc = body.text
+    ? { title: body.title ?? docId, text: body.text }
+    : await adapter.extract(env, body.url, body.html!);
+  const result = await indexExtracted(
+    env,
+    { source: body.source, docId, url: body.url, title: body.title, force: body.force },
+    doc,
+  );
+  return json({ ok: true, docId, result });
 }
 
 /** Try several header profiles against a scrape-target URL; diagnostics for 403s. */

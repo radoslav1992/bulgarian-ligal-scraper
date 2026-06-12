@@ -28,6 +28,8 @@ export interface Env {
   DB: D1Database;
   CRAWL_QUEUE: Queue<CrawlJob>;
   API_TOKEN?: string;
+  /** "worker" = cron + queue fetch directly; "push" = an external feeder posts to /ingest. */
+  SCRAPE_MODE?: string;
   ENABLED_SOURCES?: string;
   LEXBG_TREES?: string;
   VKS_RECENT_DAYS?: string;

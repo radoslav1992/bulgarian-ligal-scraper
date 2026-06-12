@@ -10,6 +10,14 @@ export default {
 
   /** Daily incremental run: re-list everything, re-index only changed documents. */
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    if ((env.SCRAPE_MODE ?? 'worker') === 'push') {
+      // lex.bg challenges datacenter IPs; fetching is done by an external
+      // feeder (scripts/local-crawl.mjs on a cron) posting to /ingest.
+      ctx.waitUntil(
+        logEvent(env, 'system', 'kickoff', 'skipped: SCRAPE_MODE=push — run scripts/local-crawl.mjs'),
+      );
+      return;
+    }
     ctx.waitUntil(kickOff(env, 'incremental'));
   },
 

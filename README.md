@@ -44,7 +44,19 @@ GET /search?q=... ──► embed query ──► Vectorize topK ──► JSON 
 
 Only `lexbg` is active out of the box (`ENABLED_SOURCES` in `wrangler.jsonc`); the daily cron and default scrape calls touch laws only. To turn on case law later: verify the VKS search parameters (below), set `ENABLED_SOURCES` to `lexbg,vks`, redeploy, and run a one-time `POST /admin/scrape {"source":"vks","mode":"full"}`.
 
-Both sites reject non-browser clients with 403, so the worker sends a regular desktop-browser profile and decodes `windows-1251` responses where needed.
+Both sites reject non-browser clients with 403, and **lex.bg sits behind Cloudflare bot protection that challenges datacenter IPs** — including Workers egress and GitHub Actions runners (verified). Page *fetching* therefore runs outside Cloudflare in the default configuration:
+
+### Fetch path (`SCRAPE_MODE`)
+
+- **`push` (default):** [`scripts/local-crawl.mjs`](scripts/local-crawl.mjs) runs on any machine whose IP lex.bg accepts (home connection, VPS) — it discovers and downloads pages, then posts the raw HTML to the worker's `POST /ingest`, where extraction, hash-based change detection, chunking, embedding and indexing happen. Run it from cron for the daily sweep:
+
+  ```cron
+  0 3 * * * cd /opt/bulgarian-legal-scraper && WORKER_URL=https://... API_TOKEN=... node scripts/local-crawl.mjs >> /var/log/legal-crawl.log 2>&1
+  ```
+
+  `/ingest` also accepts pre-extracted plain `text` instead of `html`, so an existing scrape dump can be bulk-loaded without re-fetching anything.
+
+- **`worker`:** the original in-Cloudflare crawl (cron → queue → fetch). Kept for the case where the target site is reachable from Workers; `GET /admin/test-fetch?url=...` shows what a target returns to the worker.
 
 > **⚠ One-time VKS verification needed.** The result-page and act-page URLs above are confirmed, but the *query parameter names* that `search.html` submits to `spisak-aktove.jsp` could not be verified offline. Before the first VKS crawl: open <https://www.vks.bg/search.html>, run a date-range search with browser dev tools open (Network tab), and copy the real parameter names into `SEARCH_PARAMS` (and `formatDate` if the format differs) in [`src/sources/vks.ts`](src/sources/vks.ts). The `crawl_log` table records how many acts each discovery finds — a persistent `found=0` means the parameters still need adjusting.
 >
@@ -81,18 +93,17 @@ npm run deploy
 
 ### Initial backfill
 
-```bash
-# All laws + codes + constitution from lex.bg (a few thousand documents)
-curl -X POST https://<your-worker>.workers.dev/admin/scrape \
-  -H "Authorization: Bearer $API_TOKEN" -H "Content-Type: application/json" \
-  -d '{"mode": "full"}'
+From a machine whose IP lex.bg accepts (test with `curl -s -o /dev/null -w "%{http_code}" -A "Mozilla/5.0" https://lex.bg/laws/tree/laws` — you want `200`, not `403`):
 
-# Later, once VKS is enabled (see Data sources above): case backfill
-curl -X POST .../admin/scrape -H "Authorization: Bearer $API_TOKEN" \
-  -d '{"source": "vks", "mode": "full"}'
+```bash
+WORKER_URL=https://<your-worker>.workers.dev API_TOKEN=<token> \
+  node scripts/local-crawl.mjs            # all laws + codes + constitution
+
+# smoke test first: just 5 documents
+node scripts/local-crawl.mjs --limit 5
 ```
 
-The queue works through documents at ~1–2 pages/second (tunable via `CRAWL_DELAY_MS`). Watch progress with:
+Watch progress with:
 
 ```bash
 curl https://<your-worker>.workers.dev/status -H "Authorization: Bearer $API_TOKEN"

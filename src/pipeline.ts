@@ -55,11 +55,28 @@ export async function handleDiscover(env: Env, job: Extract<CrawlJob, { type: 'd
 
 export type DocResult = 'indexed' | 'unchanged' | 'empty';
 
+export interface DocRef {
+  source: SourceId;
+  docId: string;
+  url: string;
+  title?: string;
+  force?: boolean;
+}
+
 export async function handleDoc(env: Env, job: Extract<CrawlJob, { type: 'doc' }>): Promise<DocResult> {
   const adapter = getAdapter(job.source);
+  const doc = await adapter.fetchDocument(env, job.url);
+  return indexExtracted(env, job, doc);
+}
+
+/** Hash-check, chunk, embed and upsert an already-extracted document. */
+export async function indexExtracted(
+  env: Env,
+  job: DocRef,
+  doc: { title: string; text: string } | null,
+): Promise<DocResult> {
   const now = new Date().toISOString();
 
-  const doc = await adapter.fetchDocument(env, job.url);
   if (!doc) {
     await env.DB.prepare(
       `INSERT INTO documents (doc_id, source, url, title, status, error, last_checked_at)
