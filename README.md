@@ -52,16 +52,22 @@ Both sites reject non-browser clients with 403, so the worker sends a regular de
 
 ## Setup
 
-### Deploy via GitHub (recommended)
+### Deploy via Cloudflare Workers Builds (recommended)
 
-Every push to `main` runs typecheck + tests, provisions any missing Cloudflare resources, and deploys ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)). One-time setup:
+1. **Workers Paid plan** — dashboard → Billing → subscribe ($5/mo; Vectorize requires it).
+2. **Connect the repo** — dashboard → Workers & Pages → Create → *Import a repository* → authorize the Cloudflare GitHub app for this repo, branch `main`. Set the **deploy command** to:
+   ```
+   node scripts/provision.mjs && npx wrangler deploy
+   ```
+   The provision script idempotently creates the Vectorize index (+ metadata indexes), the D1 database (and patches its id into the config at build time), both queues, and applies migrations. If Cloudflare opens a PR syncing config back into the repo, review and merge it.
+3. **If the first build fails on provisioning** (the build token may lack resource-creation rights), run it once from your machine, then retry the build — after that you can shorten the deploy command to plain `npx wrangler deploy`:
+   ```bash
+   npx wrangler login
+   npm run provision
+   ```
+4. **API token for your agents** — dashboard → your worker → Settings → Variables and Secrets → add **secret** `API_TOKEN` (any long random string), or `npx wrangler secret put API_TOKEN`. Without it the API is publicly accessible.
 
-1. In Cloudflare dashboard → **My Profile → API Tokens → Create Token**, create a token with these account permissions: **Workers Scripts: Edit**, **D1: Edit**, **Vectorize: Edit**, **Queues: Edit**.
-2. In the GitHub repo → **Settings → Secrets and variables → Actions**, add:
-   - `CLOUDFLARE_API_TOKEN` — the token from step 1
-   - `CLOUDFLARE_ACCOUNT_ID` — from dashboard → Workers & Pages (right sidebar)
-   - `WORKER_API_TOKEN` *(optional but recommended)* — any long random string; uploaded as the worker's `API_TOKEN` secret, which your agents send as a Bearer token
-3. Push to `main`. The first deploy creates the Vectorize index (1024 dims, cosine, with `source`/`docId` metadata indexes), the D1 database (id is resolved and patched into `wrangler.jsonc` automatically at deploy time), both queues, and applies migrations.
+Every push to `main` then deploys automatically; GitHub Actions ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)) runs typecheck + tests on each push/PR.
 
 ### Manual deploy (alternative)
 
