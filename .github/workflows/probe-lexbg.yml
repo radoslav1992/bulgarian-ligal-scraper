@@ -1,0 +1,20 @@
+name: Probe lex.bg access
+
+# Manual diagnostic: checks whether GitHub-hosted runners can reach lex.bg.
+# Used to validate the fallback of fetching pages from Actions when the
+# Worker's requests are blocked.
+on: workflow_dispatch
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe lex.bg
+        run: |
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+          for u in "https://lex.bg/laws/tree/laws" "https://lex.bg/laws/ldoc/521957377" "https://www.lex.bg/laws/tree/laws"; do
+            code=$(curl -s -o /tmp/out -w "%{http_code}" -A "$UA" -H "Accept-Language: bg-BG,bg;q=0.9,en;q=0.5" --max-time 30 "$u" || echo "ERR")
+            size=$(wc -c < /tmp/out 2>/dev/null || echo 0)
+            echo "=== $u -> HTTP $code, $size bytes"
+            head -c 300 /tmp/out 2>/dev/null | tr -d '\0'; echo; echo
+          done
